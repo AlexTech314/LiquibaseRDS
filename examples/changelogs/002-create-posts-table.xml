@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.0.xsd">
+
+    <changeSet id="002-create-posts-table" author="liquibase-rds-construct">
+        <comment>Create posts table</comment>
+        <createTable tableName="posts">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="TEXT"/>
+            <column name="slug" type="VARCHAR(250)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="draft">
+                <constraints nullable="false"/>
+            </column>
+            <column name="published_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="posts"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="002-create-posts-indexes" author="liquibase-rds-construct">
+        <comment>Create indexes on posts table</comment>
+        <createIndex tableName="posts" indexName="idx_posts_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        
+        <createIndex tableName="posts" indexName="idx_posts_status">
+            <column name="status"/>
+        </createIndex>
+        
+        <createIndex tableName="posts" indexName="idx_posts_published_at">
+            <column name="published_at"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="posts" indexName="idx_posts_user_id"/>
+            <dropIndex tableName="posts" indexName="idx_posts_status"/>
+            <dropIndex tableName="posts" indexName="idx_posts_published_at"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

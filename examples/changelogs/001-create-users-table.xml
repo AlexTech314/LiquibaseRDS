@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.0.xsd">
+
+    <changeSet id="001-create-users-table" author="liquibase-rds-construct">
+        <comment>Create users table</comment>
+        <createTable tableName="users">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="username" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="email" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="first_name" type="VARCHAR(50)"/>
+            <column name="last_name" type="VARCHAR(50)"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <rollback>
+            <dropTable tableName="users"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="001-create-users-email-index" author="liquibase-rds-construct">
+        <comment>Create index on users email column</comment>
+        <createIndex tableName="users" indexName="idx_users_email">
+            <column name="email"/>
+        </createIndex>
+        
+        <rollback>
+            <dropIndex tableName="users" indexName="idx_users_email"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

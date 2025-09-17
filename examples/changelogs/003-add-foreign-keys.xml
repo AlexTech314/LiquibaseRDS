@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.0.xsd">
+
+    <changeSet id="003-add-posts-user-fk" author="liquibase-rds-construct">
+        <comment>Add foreign key constraint from posts to users</comment>
+        <addForeignKeyConstraint
+            baseTableName="posts"
+            baseColumnNames="user_id"
+            constraintName="fk_posts_user_id"
+            referencedTableName="users"
+            referencedColumnNames="id"
+            onDelete="CASCADE"
+            onUpdate="CASCADE"/>
+        
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="posts" constraintName="fk_posts_user_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="003-add-check-constraints" author="liquibase-rds-construct">
+        <comment>Add check constraints for data validation</comment>
+        
+        <!-- Ensure post status is valid -->
+        <sql>
+            ALTER TABLE posts ADD CONSTRAINT chk_posts_status 
+            CHECK (status IN ('draft', 'published', 'archived'));
+        </sql>
+        
+        <!-- Ensure email format is valid (basic check) -->
+        <sql>
+            ALTER TABLE users ADD CONSTRAINT chk_users_email_format 
+            CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+        </sql>
+        
+        <rollback>
+            <sql>ALTER TABLE posts DROP CONSTRAINT IF EXISTS chk_posts_status;</sql>
+            <sql>ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_users_email_format;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -31,12 +31,13 @@ describe('LiquibaseRDS', () => {
   });
 
   test('creates CodeBuild project with correct configuration', () => {
-    // Create the construct
+    // Create the construct with ECR pull-through cache disabled
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
       rdsInstance,
       liquibaseCommand: 'update',
       changelogPath: './test/fixtures',
       vpc,
+      enableEcrPullThroughCache: false,
     });
 
     // Get the CloudFormation template
@@ -181,5 +182,51 @@ describe('LiquibaseRDS', () => {
 
     // Verify no log group is created
     template.resourceCountIs('AWS::Logs::LogGroup', 0);
+  });
+
+  test('creates ECR pull-through cache rule by default', () => {
+    new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
+      rdsInstance,
+      liquibaseCommand: 'update',
+      changelogPath: './test/fixtures',
+      vpc,
+    });
+
+    const template = Template.fromStack(stack);
+
+    // Verify ECR pull-through cache rule is created
+    template.hasResourceProperties('AWS::ECR::PullThroughCacheRule', {
+      EcrRepositoryPrefix: 'docker-hub',
+      UpstreamRegistryUrl: 'registry-1.docker.io',
+    });
+
+    // Verify CodeBuild uses ECR cached image
+    template.hasResourceProperties('AWS::CodeBuild::Project', {
+      Environment: {
+        Image: '123456789012.dkr.ecr.us-east-1.amazonaws.com/docker-hub/liquibase/liquibase:latest',
+      },
+    });
+  });
+
+  test('allows disabling ECR pull-through cache', () => {
+    new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
+      rdsInstance,
+      liquibaseCommand: 'update',
+      changelogPath: './test/fixtures',
+      vpc,
+      enableEcrPullThroughCache: false,
+    });
+
+    const template = Template.fromStack(stack);
+
+    // Verify no ECR pull-through cache rule is created
+    template.resourceCountIs('AWS::ECR::PullThroughCacheRule', 0);
+
+    // Verify CodeBuild uses direct Docker Hub image
+    template.hasResourceProperties('AWS::CodeBuild::Project', {
+      Environment: {
+        Image: 'liquibase/liquibase:latest',
+      },
+    });
   });
 });

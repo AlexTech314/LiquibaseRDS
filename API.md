@@ -100,6 +100,7 @@ Any object.
 | <code><a href="#LiquibaseRDS.LiquibaseRDS.property.codeBuildProject">codeBuildProject</a></code> | <code>aws-cdk-lib.aws_codebuild.Project</code> | The CodeBuild project that runs Liquibase. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDS.property.codeBuildRole">codeBuildRole</a></code> | <code>aws-cdk-lib.aws_iam.Role</code> | The IAM role used by the CodeBuild project. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDS.property.logGroup">logGroup</a></code> | <code>aws-cdk-lib.aws_logs.LogGroup</code> | CloudWatch Log Group for the CodeBuild project. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDS.property.pullThroughCacheRule">pullThroughCacheRule</a></code> | <code>aws-cdk-lib.CfnResource</code> | ECR pull-through cache rule (if enabled). |
 
 ---
 
@@ -163,6 +164,18 @@ CloudWatch Log Group for the CodeBuild project.
 
 ---
 
+##### `pullThroughCacheRule`<sup>Optional</sup> <a name="pullThroughCacheRule" id="LiquibaseRDS.LiquibaseRDS.property.pullThroughCacheRule"></a>
+
+```typescript
+public readonly pullThroughCacheRule: CfnResource;
+```
+
+- *Type:* aws-cdk-lib.CfnResource
+
+ECR pull-through cache rule (if enabled).
+
+---
+
 
 ## Structs <a name="Structs" id="Structs"></a>
 
@@ -190,6 +203,9 @@ const liquibaseRDSProps: LiquibaseRDSProps = { ... }
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.databasePassword">databasePassword</a></code> | <code>string</code> | Database password for Liquibase connection. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.databasePort">databasePort</a></code> | <code>number</code> | Database port to connect to. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.databaseUsername">databaseUsername</a></code> | <code>string</code> | Database username for Liquibase connection. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.dockerHubCredentialsArn">dockerHubCredentialsArn</a></code> | <code>string</code> | Credentials ARN for Docker Hub authentication (if required). |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.ecrRepositoryPrefix">ecrRepositoryPrefix</a></code> | <code>string</code> | ECR repository prefix for the pull-through cache. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.enableEcrPullThroughCache">enableEcrPullThroughCache</a></code> | <code>boolean</code> | Enable ECR pull-through cache for the Liquibase Docker image. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.enableLogging">enableLogging</a></code> | <code>boolean</code> | Whether to enable CloudWatch Logs for the CodeBuild project. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.environmentVariables">environmentVariables</a></code> | <code>{[ key: string ]: aws-cdk-lib.aws_codebuild.BuildEnvironmentVariable}</code> | Environment variables to pass to the Liquibase container. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.liquibaseImage">liquibaseImage</a></code> | <code>string</code> | Liquibase Docker image to use. |
@@ -307,6 +323,49 @@ public readonly databaseUsername: string;
 - *Default:* 'admin'
 
 Database username for Liquibase connection.
+
+---
+
+##### `dockerHubCredentialsArn`<sup>Optional</sup> <a name="dockerHubCredentialsArn" id="LiquibaseRDS.LiquibaseRDSProps.property.dockerHubCredentialsArn"></a>
+
+```typescript
+public readonly dockerHubCredentialsArn: string;
+```
+
+- *Type:* string
+
+Credentials ARN for Docker Hub authentication (if required).
+
+Should be a Secrets Manager secret with ecr-pullthroughcache/ prefix.
+
+---
+
+##### `ecrRepositoryPrefix`<sup>Optional</sup> <a name="ecrRepositoryPrefix" id="LiquibaseRDS.LiquibaseRDSProps.property.ecrRepositoryPrefix"></a>
+
+```typescript
+public readonly ecrRepositoryPrefix: string;
+```
+
+- *Type:* string
+- *Default:* 'docker-hub'
+
+ECR repository prefix for the pull-through cache.
+
+---
+
+##### `enableEcrPullThroughCache`<sup>Optional</sup> <a name="enableEcrPullThroughCache" id="LiquibaseRDS.LiquibaseRDSProps.property.enableEcrPullThroughCache"></a>
+
+```typescript
+public readonly enableEcrPullThroughCache: boolean;
+```
+
+- *Type:* boolean
+- *Default:* true
+
+Enable ECR pull-through cache for the Liquibase Docker image.
+
+This will create a pull-through cache rule for Docker Hub and use
+the cached image from your private ECR registry.
 
 ---
 

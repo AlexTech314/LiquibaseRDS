@@ -6,6 +6,7 @@ import {
   aws_rds as rds,
   aws_s3 as s3,
   aws_s3_assets as assets,
+  CfnResource,
   Duration,
   RemovalPolicy,
 } from 'aws-cdk-lib';
@@ -83,6 +84,26 @@ export interface LiquibaseRDSProps {
   readonly liquibaseImage?: string;
 
   /**
+   * Enable ECR pull-through cache for the Liquibase Docker image.
+   * This will create a pull-through cache rule for Docker Hub and use
+   * the cached image from your private ECR registry.
+   * @default true
+   */
+  readonly enableEcrPullThroughCache?: boolean;
+
+  /**
+   * ECR repository prefix for the pull-through cache.
+   * @default 'docker-hub'
+   */
+  readonly ecrRepositoryPrefix?: string;
+
+  /**
+   * Credentials ARN for Docker Hub authentication (if required).
+   * Should be a Secrets Manager secret with ecr-pullthroughcache/ prefix.
+   */
+  readonly dockerHubCredentialsArn?: string;
+
+  /**
    * Additional Liquibase command line arguments.
    * @default []
    */
@@ -138,6 +159,11 @@ export class LiquibaseRDS extends Construct {
    */
   public readonly logGroup?: logs.LogGroup;
 
+  /**
+   * ECR pull-through cache rule (if enabled)
+   */
+  public readonly pullThroughCacheRule?: CfnResource;
+
   constructor(scope: Construct, id: string, props: LiquibaseRDSProps) {
     super(scope, id);
 
@@ -159,6 +185,12 @@ export class LiquibaseRDS extends Construct {
 
     // Grant permissions to access RDS (if using IAM authentication)
     this.grantRdsAccess(props.rdsInstance);
+
+    // Create ECR pull-through cache rule if enabled
+    if (props.enableEcrPullThroughCache !== false) {
+      this.pullThroughCacheRule = this.createPullThroughCacheRule(props);
+      this.grantEcrAccess();
+    }
 
     // Create CloudWatch Log Group if logging is enabled
     if (props.enableLogging !== false) {
@@ -199,15 +231,16 @@ export class LiquibaseRDS extends Construct {
     // Build the buildspec
     const buildSpec = this.createBuildSpec(props);
 
+    // Determine the Docker image to use (ECR cached or direct)
+    const dockerImage = this.getDockerImage(props);
+
     // Create the CodeBuild project
     this.codeBuildProject = new codebuild.Project(this, 'LiquibaseProject', {
       projectName: `${id}-liquibase`,
       description: 'CodeBuild project to run Liquibase migrations',
       role: this.codeBuildRole,
       environment: {
-        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(
-          props.liquibaseImage || 'liquibase/liquibase:latest',
-        ),
+        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(dockerImage),
         computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
@@ -246,6 +279,22 @@ export class LiquibaseRDS extends Construct {
       actions: [
         'rds:DescribeDBInstances',
         'rds:DescribeDBClusters',
+      ],
+      resources: ['*'],
+    }));
+  }
+
+  /**
+   * Grant the CodeBuild role access to ECR for pulling images
+   */
+  private grantEcrAccess(): void {
+    this.codeBuildRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ecr:BatchCheckLayerAvailability',
+        'ecr:GetDownloadUrlForLayer',
+        'ecr:BatchGetImage',
+        'ecr:GetAuthorizationToken',
       ],
       resources: ['*'],
     }));
@@ -322,6 +371,48 @@ export class LiquibaseRDS extends Construct {
         },
       },
     });
+  }
+
+  /**
+   * Create ECR pull-through cache rule for Docker Hub
+   */
+  private createPullThroughCacheRule(props: LiquibaseRDSProps): CfnResource {
+    const repositoryPrefix = props.ecrRepositoryPrefix || 'docker-hub';
+
+    const pullThroughCacheProps: any = {
+      EcrRepositoryPrefix: repositoryPrefix,
+      UpstreamRegistryUrl: 'registry-1.docker.io',
+    };
+
+    // Add credentials if provided
+    if (props.dockerHubCredentialsArn) {
+      pullThroughCacheProps.CredentialArn = props.dockerHubCredentialsArn;
+    }
+
+    return new CfnResource(this, 'PullThroughCacheRule', {
+      type: 'AWS::ECR::PullThroughCacheRule',
+      properties: pullThroughCacheProps,
+    });
+  }
+
+  /**
+   * Determine the Docker image URI to use
+   */
+  private getDockerImage(props: LiquibaseRDSProps): string {
+    const baseImage = props.liquibaseImage || 'liquibase/liquibase:latest';
+
+    if (props.enableEcrPullThroughCache !== false) {
+      // Use ECR pull-through cache
+      const repositoryPrefix = props.ecrRepositoryPrefix || 'docker-hub';
+      const region = this.node.tryGetContext('aws:region') || process.env.CDK_DEFAULT_REGION || 'us-east-1';
+      const account = this.node.tryGetContext('aws:account') || process.env.CDK_DEFAULT_ACCOUNT || '123456789012';
+
+      // Convert Docker Hub image to ECR cached format
+      // e.g., liquibase/liquibase:latest -> {account}.dkr.ecr.{region}.amazonaws.com/docker-hub/liquibase/liquibase:latest
+      return `${account}.dkr.ecr.${region}.amazonaws.com/${repositoryPrefix}/${baseImage}`;
+    }
+
+    return baseImage;
   }
 
   /**

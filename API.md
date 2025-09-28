@@ -196,24 +196,17 @@ const liquibaseRDSProps: LiquibaseRDSProps = { ... }
 | **Name** | **Type** | **Description** |
 | --- | --- | --- |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.changelogPath">changelogPath</a></code> | <code>string</code> | Path to the directory containing Liquibase changelog files. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.liquibaseCommand">liquibaseCommand</a></code> | <code>string</code> | The Liquibase command to execute. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.rdsInstance">rdsInstance</a></code> | <code>aws-cdk-lib.aws_rds.IDatabaseInstance \| aws-cdk-lib.aws_rds.IDatabaseCluster</code> | The RDS instance to run Liquibase against. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.additionalArgs">additionalArgs</a></code> | <code>string[]</code> | Additional Liquibase command line arguments. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.databaseName">databaseName</a></code> | <code>string</code> | Database name to connect to. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.databasePassword">databasePassword</a></code> | <code>string</code> | Database password for Liquibase connection. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.databasePort">databasePort</a></code> | <code>number</code> | Database port to connect to. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.databaseUsername">databaseUsername</a></code> | <code>string</code> | Database username for Liquibase connection. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.dockerHubCredentialsArn">dockerHubCredentialsArn</a></code> | <code>string</code> | Credentials ARN for Docker Hub authentication (if required). |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.ecrRepositoryPrefix">ecrRepositoryPrefix</a></code> | <code>string</code> | ECR repository prefix for the pull-through cache. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.enableEcrPullThroughCache">enableEcrPullThroughCache</a></code> | <code>boolean</code> | Enable ECR pull-through cache for the Liquibase Docker image. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.liquibaseCommands">liquibaseCommands</a></code> | <code>string[]</code> | The Liquibase command to execute. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.rdsDatabase">rdsDatabase</a></code> | <code>aws-cdk-lib.aws_rds.DatabaseInstance \| aws-cdk-lib.aws_rds.DatabaseCluster</code> | The RDS instance to run Liquibase against. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.additionalArgs">additionalArgs</a></code> | <code>string[]</code> | Additional Liquibase command line arguments. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.autoRun">autoRun</a></code> | <code>boolean</code> | Whether to automatically run Liquibase during CDK deployment. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.dockerHubCredentialsArn">dockerHubCredentialsArn</a></code> | <code>string</code> | Credentials ARN for Docker Hub authentication (required for pull-through cache). |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.enableLogging">enableLogging</a></code> | <code>boolean</code> | Whether to enable CloudWatch Logs for the CodeBuild project. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.environmentVariables">environmentVariables</a></code> | <code>{[ key: string ]: aws-cdk-lib.aws_codebuild.BuildEnvironmentVariable}</code> | Environment variables to pass to the Liquibase container. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.liquibaseImage">liquibaseImage</a></code> | <code>string</code> | Liquibase Docker image to use. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.logRetention">logRetention</a></code> | <code>aws-cdk-lib.aws_logs.RetentionDays</code> | Log retention period for CloudWatch Logs. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.securityGroups">securityGroups</a></code> | <code>aws-cdk-lib.aws_ec2.ISecurityGroup[]</code> | Security groups to attach to the CodeBuild project. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.subnets">subnets</a></code> | <code>aws-cdk-lib.aws_ec2.SubnetSelection</code> | Subnets where the CodeBuild project should run. |
 | <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.timeout">timeout</a></code> | <code>aws-cdk-lib.Duration</code> | Timeout for the CodeBuild project execution. |
-| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.vpc">vpc</a></code> | <code>aws-cdk-lib.aws_ec2.IVpc</code> | VPC where the CodeBuild project should run. |
+| <code><a href="#LiquibaseRDS.LiquibaseRDSProps.property.vpc">vpc</a></code> | <code>aws-cdk-lib.aws_ec2.IVpc</code> | VPC to connect to - required if using a cluster. |
 
 ---
 
@@ -231,13 +224,26 @@ This directory will be uploaded to S3 and made available to the CodeBuild projec
 
 ---
 
-##### `liquibaseCommand`<sup>Required</sup> <a name="liquibaseCommand" id="LiquibaseRDS.LiquibaseRDSProps.property.liquibaseCommand"></a>
+##### `databaseName`<sup>Required</sup> <a name="databaseName" id="LiquibaseRDS.LiquibaseRDSProps.property.databaseName"></a>
 
 ```typescript
-public readonly liquibaseCommand: string;
+public readonly databaseName: string;
 ```
 
 - *Type:* string
+- *Default:* Uses the default database name from the RDS instance
+
+Database name to connect to.
+
+---
+
+##### `liquibaseCommands`<sup>Required</sup> <a name="liquibaseCommands" id="LiquibaseRDS.LiquibaseRDSProps.property.liquibaseCommands"></a>
+
+```typescript
+public readonly liquibaseCommands: string[];
+```
+
+- *Type:* string[]
 
 The Liquibase command to execute.
 
@@ -245,13 +251,13 @@ Example: "update", "rollback", "validate", etc.
 
 ---
 
-##### `rdsInstance`<sup>Required</sup> <a name="rdsInstance" id="LiquibaseRDS.LiquibaseRDSProps.property.rdsInstance"></a>
+##### `rdsDatabase`<sup>Required</sup> <a name="rdsDatabase" id="LiquibaseRDS.LiquibaseRDSProps.property.rdsDatabase"></a>
 
 ```typescript
-public readonly rdsInstance: IDatabaseInstance | IDatabaseCluster;
+public readonly rdsDatabase: DatabaseInstance | DatabaseCluster;
 ```
 
-- *Type:* aws-cdk-lib.aws_rds.IDatabaseInstance | aws-cdk-lib.aws_rds.IDatabaseCluster
+- *Type:* aws-cdk-lib.aws_rds.DatabaseInstance | aws-cdk-lib.aws_rds.DatabaseCluster
 
 The RDS instance to run Liquibase against.
 
@@ -272,57 +278,18 @@ Additional Liquibase command line arguments.
 
 ---
 
-##### `databaseName`<sup>Optional</sup> <a name="databaseName" id="LiquibaseRDS.LiquibaseRDSProps.property.databaseName"></a>
+##### `autoRun`<sup>Optional</sup> <a name="autoRun" id="LiquibaseRDS.LiquibaseRDSProps.property.autoRun"></a>
 
 ```typescript
-public readonly databaseName: string;
+public readonly autoRun: boolean;
 ```
 
-- *Type:* string
-- *Default:* Uses the default database for the RDS instance
+- *Type:* boolean
+- *Default:* true
 
-Database name to connect to.
+Whether to automatically run Liquibase during CDK deployment.
 
----
-
-##### `databasePassword`<sup>Optional</sup> <a name="databasePassword" id="LiquibaseRDS.LiquibaseRDSProps.property.databasePassword"></a>
-
-```typescript
-public readonly databasePassword: string;
-```
-
-- *Type:* string
-
-Database password for Liquibase connection.
-
-This should be stored in AWS Secrets Manager or Systems Manager Parameter Store.
-Provide the ARN or parameter name.
-
----
-
-##### `databasePort`<sup>Optional</sup> <a name="databasePort" id="LiquibaseRDS.LiquibaseRDSProps.property.databasePort"></a>
-
-```typescript
-public readonly databasePort: number;
-```
-
-- *Type:* number
-- *Default:* Uses the port from the RDS instance (5432 for PostgreSQL, 3306 for MySQL)
-
-Database port to connect to.
-
----
-
-##### `databaseUsername`<sup>Optional</sup> <a name="databaseUsername" id="LiquibaseRDS.LiquibaseRDSProps.property.databaseUsername"></a>
-
-```typescript
-public readonly databaseUsername: string;
-```
-
-- *Type:* string
-- *Default:* 'admin'
-
-Database username for Liquibase connection.
+If enabled, the Liquibase commands will be executed every time the stack is deployed.
 
 ---
 
@@ -334,38 +301,19 @@ public readonly dockerHubCredentialsArn: string;
 
 - *Type:* string
 
-Credentials ARN for Docker Hub authentication (if required).
+Credentials ARN for Docker Hub authentication (required for pull-through cache).
 
-Should be a Secrets Manager secret with ecr-pullthroughcache/ prefix.
+Should be a Secrets Manager secret with JSON format:
+{
+  "username": "your-docker-hub-username",
+  "password": "your-docker-hub-password-or-token"
+}
 
----
-
-##### `ecrRepositoryPrefix`<sup>Optional</sup> <a name="ecrRepositoryPrefix" id="LiquibaseRDS.LiquibaseRDSProps.property.ecrRepositoryPrefix"></a>
-
-```typescript
-public readonly ecrRepositoryPrefix: string;
-```
-
-- *Type:* string
-- *Default:* 'docker-hub'
-
-ECR repository prefix for the pull-through cache.
-
----
-
-##### `enableEcrPullThroughCache`<sup>Optional</sup> <a name="enableEcrPullThroughCache" id="LiquibaseRDS.LiquibaseRDSProps.property.enableEcrPullThroughCache"></a>
-
-```typescript
-public readonly enableEcrPullThroughCache: boolean;
-```
-
-- *Type:* boolean
-- *Default:* true
-
-Enable ECR pull-through cache for the Liquibase Docker image.
-
-This will create a pull-through cache rule for Docker Hub and use
-the cached image from your private ECR registry.
+To create this secret:
+aws secretsmanager create-secret \
+  --name "ecr-pullthroughcache/docker-hub" \
+  --description "Docker Hub credentials for ECR pull-through cache" \
+  --secret-string '{"username":"your-username","password":"your-password"}'
 
 ---
 
@@ -395,19 +343,6 @@ Environment variables to pass to the Liquibase container.
 
 ---
 
-##### `liquibaseImage`<sup>Optional</sup> <a name="liquibaseImage" id="LiquibaseRDS.LiquibaseRDSProps.property.liquibaseImage"></a>
-
-```typescript
-public readonly liquibaseImage: string;
-```
-
-- *Type:* string
-- *Default:* 'liquibase/liquibase:latest'
-
-Liquibase Docker image to use.
-
----
-
 ##### `logRetention`<sup>Optional</sup> <a name="logRetention" id="LiquibaseRDS.LiquibaseRDSProps.property.logRetention"></a>
 
 ```typescript
@@ -418,34 +353,6 @@ public readonly logRetention: RetentionDays;
 - *Default:* logs.RetentionDays.ONE_WEEK
 
 Log retention period for CloudWatch Logs.
-
----
-
-##### `securityGroups`<sup>Optional</sup> <a name="securityGroups" id="LiquibaseRDS.LiquibaseRDSProps.property.securityGroups"></a>
-
-```typescript
-public readonly securityGroups: ISecurityGroup[];
-```
-
-- *Type:* aws-cdk-lib.aws_ec2.ISecurityGroup[]
-
-Security groups to attach to the CodeBuild project.
-
-Should allow access to the RDS instance.
-
----
-
-##### `subnets`<sup>Optional</sup> <a name="subnets" id="LiquibaseRDS.LiquibaseRDSProps.property.subnets"></a>
-
-```typescript
-public readonly subnets: SubnetSelection;
-```
-
-- *Type:* aws-cdk-lib.aws_ec2.SubnetSelection
-
-Subnets where the CodeBuild project should run.
-
-Should be private subnets with access to the RDS instance.
 
 ---
 
@@ -469,10 +376,9 @@ public readonly vpc: IVpc;
 ```
 
 - *Type:* aws-cdk-lib.aws_ec2.IVpc
+- *Default:* Uses the VPC from the RDS instance
 
-VPC where the CodeBuild project should run.
-
-Must be the same VPC as the RDS instance for private connectivity.
+VPC to connect to - required if using a cluster.
 
 ---
 

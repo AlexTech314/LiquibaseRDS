@@ -4,7 +4,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
   authorAddress: 'alest314@gmail.com',
   cdkVersion: '2.217.0',
   defaultReleaseBranch: 'main',
-  jsiiVersion: '~5.9.0',
+  jsiiVersion: '^5.9.6',
   name: 'LiquibaseRDS',
   projenrcTs: true,
   repositoryUrl: 'https://github.com/alest314/LiquibaseRDS.git',

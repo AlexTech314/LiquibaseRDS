@@ -728,14 +728,6 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
-"@jsii/check-node@1.113.0":
-  version "1.113.0"
-  resolved "https://registry.npmjs.org/@jsii/check-node/-/check-node-1.113.0.tgz"
-  integrity sha512-6iPLiQiSVn8/D89ycIpj78cMfmxOIU/F9RUTVYwLqKPw4cxpR+BCC4N83WKyGkZxhOxULLa9f5q+rkWq/vAMpA==
-  dependencies:
-    chalk "^4.1.2"
-    semver "^7.7.2"
-
 "@jsii/check-node@1.114.1":
   version "1.114.1"
   resolved "https://registry.npmjs.org/@jsii/check-node/-/check-node-1.114.1.tgz"
@@ -744,7 +736,7 @@
     chalk "^4.1.2"
     semver "^7.7.2"
 
-"@jsii/spec@^1.113.0", "@jsii/spec@^1.114.1", "@jsii/spec@1.114.1":
+"@jsii/spec@^1.114.1", "@jsii/spec@1.114.1":
   version "1.114.1"
   resolved "https://registry.npmjs.org/@jsii/spec/-/spec-1.114.1.tgz"
   integrity sha512-SdjVQaNqLkTUK+2R0/t/MnM/NBvv1vzqxO5sn1nnoFD5Wlih8TFOIjl+Q8npzYmOtN+et3D+BMVYrxmVfq4X0w==
@@ -1862,8 +1854,6 @@ create-require@^1.1.0:
 
 cross-spawn@^6.0.0:
   version "6.0.6"
-  resolved "https://registry.npmjs.org/cross-spawn/-/cross-spawn-6.0.6.tgz"
-  integrity sha512-VqCUuhcd1iB+dsv8gxPttb5iZh/D0iubSP21g36KXdEuf6I5JiioesUVjpCdHV9MZRUfVFlvwtIUyPfxo5trtw==
   dependencies:
     nice-try "^1.0.4"
     path-key "^2.0.1"
@@ -3292,6 +3282,11 @@ isexe@^2.0.0:
   resolved "https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz"
   integrity sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==
 
+isexe@^3.1.1:
+  version "3.1.1"
+  resolved "https://registry.npmjs.org/isexe/-/isexe-3.1.1.tgz"
+  integrity sha512-LpB/54B+/2J5hqQ7imZHfdU31OlgQqx7ZicVlkm9kzg9/w8GKLEcFfJl/t7DCEDueOyBAD6zCCwTO6Fzs0NoEQ==
+
 istanbul-lib-coverage@^3.0.0, istanbul-lib-coverage@^3.2.0:
   version "3.2.2"
   resolved "https://registry.npmjs.org/istanbul-lib-coverage/-/istanbul-lib-coverage-3.2.2.tgz"
@@ -3825,13 +3820,13 @@ jsii-reflect@^1.114.1:
     oo-ascii-tree "^1.114.1"
     yargs "^17.7.2"
 
-"jsii-rosetta@^1.85.0 || ~5.0.14 || ~5.1.2 || ~5.2.0 || ~5.3.0 || ~5.4.0 || ~5.5.0 || ~5.6.0 || ~5.7.0 || ~5.8.0 || ~5.9.1", jsii-rosetta@>=5.7.0, jsii-rosetta@~5.9.0:
-  version "5.9.5"
-  resolved "https://registry.npmjs.org/jsii-rosetta/-/jsii-rosetta-5.9.5.tgz"
-  integrity sha512-CpkaRtf/7sX8zbPUjGuqzCK3jjp3Ph5mvWReTZ/N/lUcn9OPE+/5/Uxy9c6N9Ht9lr8/CMgCWhI+VCp9WVprnA==
+"jsii-rosetta@^1.85.0 || ~5.0.14 || ~5.1.2 || ~5.2.0 || ~5.3.0 || ~5.4.0 || ~5.5.0 || ~5.6.0 || ~5.7.0 || ~5.8.0 || ~5.9.1", jsii-rosetta@^5.9.6, jsii-rosetta@>=5.7.0:
+  version "5.9.6"
+  resolved "https://registry.npmjs.org/jsii-rosetta/-/jsii-rosetta-5.9.6.tgz"
+  integrity sha512-oRf+Yjp5n/DjS2WsEWDCAw9wKyqXybPjXcpytXUNEFooXuF/Qpg2WcyPLPpjfdgq+c+ZVSdk50YdPbXrCa8Ejw==
   dependencies:
-    "@jsii/check-node" "1.113.0"
-    "@jsii/spec" "^1.113.0"
+    "@jsii/check-node" "1.114.1"
+    "@jsii/spec" "^1.114.1"
     "@xmldom/xmldom" "^0.9.8"
     chalk "^4"
     commonmark "^0.31.2"
@@ -3844,13 +3839,13 @@ jsii-reflect@^1.114.1:
     workerpool "^6.5.1"
     yargs "^17.7.2"
 
-jsii@~5.9.0, jsii@~5.9.1:
-  version "5.9.4"
-  resolved "https://registry.npmjs.org/jsii/-/jsii-5.9.4.tgz"
-  integrity sha512-YLNzhSwLyFU6R3DRAykJOM7hTQbRXqPH4/2uBpFJ4y5/Kj/blrK6mKO2W7bG7oRG6crw/Ui5gUTk4/eLuFJguA==
+jsii@^5.9.6, jsii@~5.9.1:
+  version "5.9.6"
+  resolved "https://registry.npmjs.org/jsii/-/jsii-5.9.6.tgz"
+  integrity sha512-OKy0/zkolKUXDZDv747g0f8AXiEmgRRWJ2lrWLDy7AAzDyQ9ZjRE/Fb4aeWbbstJXd5+F3yTf9ewhAcsQ1e8vw==
   dependencies:
-    "@jsii/check-node" "1.113.0"
-    "@jsii/spec" "^1.113.0"
+    "@jsii/check-node" "1.114.1"
+    "@jsii/spec" "1.114.1"
     case "^1.6.3"
     chalk "^4"
     fast-deep-equal "^3.1.3"
@@ -3879,8 +3874,6 @@ json-parse-even-better-errors@^2.3.0:
 
 json-parse-even-better-errors@^4.0.0:
   version "4.0.0"
-  resolved "https://registry.npmjs.org/json-parse-even-better-errors/-/json-parse-even-better-errors-4.0.0.tgz"
-  integrity sha512-lR4MXjGNgkJc7tkQ97kb2nuEMnNCyU//XYVH0MKTGcXEiSudQ5MKGKen3C5QubYy0vmq+JGitUg92uuywGEwIA==
 
 json-schema-traverse@^0.4.1:
   version "0.4.1"
@@ -4663,10 +4656,10 @@ process-nextick-args@~2.0.0:
   resolved "https://registry.npmjs.org/process-nextick-args/-/process-nextick-args-2.0.1.tgz"
   integrity sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==
 
-projen@^0.96.1:
-  version "0.96.1"
-  resolved "https://registry.npmjs.org/projen/-/projen-0.96.1.tgz"
-  integrity sha512-LvqEtsJjMV8BiUTbcE3Su1zWsyRC1GPh9C6sbicfBCooZvHa3LUzXGYRSKuYD6arkw4sbQMDEPcqxWzn6Q1Ovw==
+projen@^0.96.3:
+  version "0.96.3"
+  resolved "https://registry.npmjs.org/projen/-/projen-0.96.3.tgz"
+  integrity sha512-0OMvTCnOSp7Y7OB2vGN55EKnwby8RmUap37OpI54dZqJlPyASJNN9C2+l/MDjukBvSV5rNIKTj7I++QSo8K6YA==
   dependencies:
     "@iarna/toml" "^2.2.5"
     case "^1.6.3"
@@ -5842,6 +5835,13 @@ which@^2.0.1:
   integrity sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==
   dependencies:
     isexe "^2.0.0"
+
+which@^5.0.0:
+  version "5.0.0"
+  resolved "https://registry.npmjs.org/which/-/which-5.0.0.tgz"
+  integrity sha512-JEdGzHwwkrbWoGOlIHqQ5gtprKGOenpDHpxE9zVR1bWbOtYRyPPHMe9FaP6x61CmNaTThSkb0DAJte5jD+DmzQ==
+  dependencies:
+    isexe "^3.1.1"
 
 word-wrap@^1.2.5:
   version "1.2.5"

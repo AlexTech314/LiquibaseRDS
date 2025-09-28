@@ -4,14 +4,22 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import { Construct } from 'constructs';
 import { LiquibaseRDS } from '../src';
 
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+dotenv.config();
+
 export class LiquibaseRDSExampleStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
-
-    // Create VPC
+    // Create VPC with reduced NAT gateways to avoid EIP limits
     const vpc = new ec2.Vpc(this, 'ExampleVpc', {
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: 1, // Keep to 1 to minimize EIP usage
+      // Optionally, you can use NAT instances instead of NAT gateways
+      // natGatewayProvider: ec2.NatProvider.instance({
+      //   instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.NANO),
+      // }),
     });
 
     // Create RDS PostgreSQL instance
@@ -42,28 +50,22 @@ export class LiquibaseRDSExampleStack extends Stack {
 
     // Create LiquibaseRDS construct for running migrations
     new LiquibaseRDS(this, 'LiquibaseMigration', {
-      rdsInstance: database,
-      liquibaseCommand: 'update',
-      changelogPath: './changelogs', // Path to your changelog directory
-      databaseUsername: 'admin',
-      databasePassword: database.secret?.secretArn, // Use the generated secret ARN
+      rdsDatabase: database,
+      liquibaseCommands: ['clearCheckSums', 'update'],
+      changelogPath: path.resolve(__dirname, './changelogs'),
+      dockerHubCredentialsArn: process.env.DOCKER_HUB_CREDENTIALS_ARN || '',
       databaseName: 'exampledb',
-      databasePort: 5432,
-      vpc,
-      subnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
-      },
-      securityGroups: [codeBuildSecurityGroup],
       additionalArgs: ['--log-level=INFO'],
       environmentVariables: {
         LIQUIBASE_HUB_MODE: { value: 'off' },
       },
+      autoRun: true, // Automatically run Liquibase during CDK deployment
     });
 
     // Example with RDS Aurora Cluster
     const cluster = new rds.DatabaseCluster(this, 'ExampleCluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_13_4,
+        version: rds.AuroraPostgresEngineVersion.VER_17_5,
       }),
       instanceProps: {
         instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
@@ -84,20 +86,14 @@ export class LiquibaseRDSExampleStack extends Stack {
 
     // Create LiquibaseRDS construct for Aurora cluster
     new LiquibaseRDS(this, 'LiquibaseClusterMigration', {
-      rdsInstance: cluster,
-      liquibaseCommand: 'validate',
-      changelogPath: './changelogs',
-      databaseUsername: 'admin',
-      databasePassword: cluster.secret?.secretArn,
+      rdsDatabase: cluster,
+      liquibaseCommands: ['validate'],
+      changelogPath: path.resolve(__dirname, './changelogs'),
+      dockerHubCredentialsArn: process.env.DOCKER_HUB_CREDENTIALS_ARN || 'arn:aws:secretsmanager:us-east-1:123456789012:secret:ecr-pullthroughcache/docker-hub-example',
       databaseName: 'clusterdb',
-      databasePort: 5432,
-      vpc,
-      subnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
-      },
-      securityGroups: [codeBuildSecurityGroup],
-      liquibaseImage: 'liquibase/liquibase:4.24',
+      vpc: vpc, // Required for clusters
       enableLogging: true,
+      autoRun: true, // Automatically run Liquibase during CDK deployment
     });
   }
 }

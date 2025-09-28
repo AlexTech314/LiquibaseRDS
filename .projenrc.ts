@@ -2,7 +2,7 @@ import { awscdk } from 'projen';
 const project = new awscdk.AwsCdkConstructLibrary({
   author: 'AlexTech314',
   authorAddress: 'alest314@gmail.com',
-  cdkVersion: '2.1.0',
+  cdkVersion: '2.217.0',
   defaultReleaseBranch: 'main',
   jsiiVersion: '~5.9.0',
   name: 'LiquibaseRDS',
@@ -12,6 +12,7 @@ const project = new awscdk.AwsCdkConstructLibrary({
   description: 'A CDK construct for running Liquibase migrations against RDS instances using CodeBuild',
   keywords: ['aws', 'cdk', 'liquibase', 'rds', 'database', 'migration'],
 
+
   // Enable dry run mode - this will prevent actual publishing but keep the workflows
   publishDryRun: true,
 
@@ -19,6 +20,14 @@ const project = new awscdk.AwsCdkConstructLibrary({
     distName: 'liquibase-rds-cdk',
     module: 'liquibase_rds_cdk',
   },
+
+  // Add dependencies
+  bundledDeps: [
+    'dotenv@^17.2.2',
+  ],
+
+  // Add .env files to gitignore
+  gitignore: ['.env', '.env.*', 'cdk.out'],
 });
 
 project.synth();

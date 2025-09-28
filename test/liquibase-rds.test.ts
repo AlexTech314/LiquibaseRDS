@@ -22,7 +22,7 @@ describe('LiquibaseRDS', () => {
     // Create RDS instance for testing
     rdsInstance = new rds.DatabaseInstance(stack, 'TestRds', {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_13_4,
+        version: rds.PostgresEngineVersion.VER_17_5,
       }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc,
@@ -31,13 +31,13 @@ describe('LiquibaseRDS', () => {
   });
 
   test('creates CodeBuild project with correct configuration', () => {
-    // Create the construct with ECR pull-through cache disabled
+    // Create the construct without Docker Hub credentials (uses Docker Hub directly)
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance,
-      liquibaseCommand: 'update',
+      rdsDatabase: rdsInstance,
+      liquibaseCommands: ['update'],
       changelogPath: './test/fixtures',
-      vpc,
-      enableEcrPullThroughCache: false,
+      databaseName: 'testdb',
+      autoRun: false, // Disable auto-run for tests
     });
 
     // Get the CloudFormation template
@@ -56,10 +56,11 @@ describe('LiquibaseRDS', () => {
 
   test('creates IAM role with correct permissions', () => {
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance,
-      liquibaseCommand: 'validate',
+      rdsDatabase: rdsInstance,
+      liquibaseCommands: ['validate'],
       changelogPath: './test/fixtures',
-      vpc,
+      databaseName: 'testdb',
+      autoRun: false,
     });
 
     const template = Template.fromStack(stack);
@@ -82,20 +83,22 @@ describe('LiquibaseRDS', () => {
     // Create RDS cluster for testing
     const rdsCluster = new rds.DatabaseCluster(stack, 'TestRdsCluster', {
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_13_4,
+        version: rds.AuroraPostgresEngineVersion.VER_17_5,
       }),
-      instanceProps: {
+      writer: rds.ClusterInstance.provisioned('writer', {
         instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
-        vpc,
-      },
+      }),
+      vpc,
       credentials: rds.Credentials.fromGeneratedSecret('admin'),
     });
 
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance: rdsCluster,
-      liquibaseCommand: 'update',
+      rdsDatabase: rdsCluster,
+      liquibaseCommands: ['update'],
       changelogPath: './test/fixtures',
-      vpc,
+      databaseName: 'testdb',
+      vpc: vpc, // Required for clusters
+      autoRun: false,
     });
 
     const template = Template.fromStack(stack);
@@ -111,13 +114,11 @@ describe('LiquibaseRDS', () => {
 
   test('configures environment variables correctly', () => {
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance,
-      liquibaseCommand: 'update',
+      rdsDatabase: rdsInstance,
+      liquibaseCommands: ['update', 'validate'],
       changelogPath: './test/fixtures',
       databaseName: 'mydb',
-      databaseUsername: 'testuser',
-      databasePort: 5432,
-      vpc,
+      autoRun: false,
     });
 
     const template = Template.fromStack(stack);
@@ -130,9 +131,9 @@ describe('LiquibaseRDS', () => {
     // Check for specific environment variables
     expect(envVars).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        Name: 'LIQUIBASE_COMMAND',
+        Name: 'LIQUIBASE_COMMANDS',
         Type: 'PLAINTEXT',
-        Value: 'update',
+        Value: 'update,validate',
       }),
       expect.objectContaining({
         Name: 'DATABASE_NAME',
@@ -140,24 +141,19 @@ describe('LiquibaseRDS', () => {
         Value: 'mydb',
       }),
       expect.objectContaining({
-        Name: 'DATABASE_USERNAME',
-        Type: 'PLAINTEXT',
-        Value: 'testuser',
-      }),
-      expect.objectContaining({
         Name: 'RDS_PORT',
         Type: 'PLAINTEXT',
-        Value: '5432',
       }),
     ]));
   });
 
   test('creates CloudWatch log group by default', () => {
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance,
-      liquibaseCommand: 'update',
+      rdsDatabase: rdsInstance,
+      liquibaseCommands: ['update'],
       changelogPath: './test/fixtures',
-      vpc,
+      databaseName: 'testdb',
+      autoRun: false,
     });
 
     const template = Template.fromStack(stack);
@@ -171,11 +167,12 @@ describe('LiquibaseRDS', () => {
 
   test('allows disabling logging', () => {
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance,
-      liquibaseCommand: 'update',
+      rdsDatabase: rdsInstance,
+      liquibaseCommands: ['update'],
       changelogPath: './test/fixtures',
-      vpc,
+      databaseName: 'testdb',
       enableLogging: false,
+      autoRun: false,
     });
 
     const template = Template.fromStack(stack);
@@ -184,37 +181,15 @@ describe('LiquibaseRDS', () => {
     template.resourceCountIs('AWS::Logs::LogGroup', 0);
   });
 
-  test('creates ECR pull-through cache rule by default', () => {
+
+  test('uses Docker Hub directly without credentials', () => {
     new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance,
-      liquibaseCommand: 'update',
+      rdsDatabase: rdsInstance,
+      liquibaseCommands: ['update'],
       changelogPath: './test/fixtures',
-      vpc,
-    });
-
-    const template = Template.fromStack(stack);
-
-    // Verify ECR pull-through cache rule is created
-    template.hasResourceProperties('AWS::ECR::PullThroughCacheRule', {
-      EcrRepositoryPrefix: 'docker-hub',
-      UpstreamRegistryUrl: 'registry-1.docker.io',
-    });
-
-    // Verify CodeBuild uses ECR cached image
-    template.hasResourceProperties('AWS::CodeBuild::Project', {
-      Environment: {
-        Image: '123456789012.dkr.ecr.us-east-1.amazonaws.com/docker-hub/liquibase/liquibase:latest',
-      },
-    });
-  });
-
-  test('allows disabling ECR pull-through cache', () => {
-    new LiquibaseRDS(stack, 'TestLiquibaseRDS', {
-      rdsInstance,
-      liquibaseCommand: 'update',
-      changelogPath: './test/fixtures',
-      vpc,
-      enableEcrPullThroughCache: false,
+      databaseName: 'testdb',
+      // No dockerHubCredentialsArn provided
+      autoRun: false,
     });
 
     const template = Template.fromStack(stack);

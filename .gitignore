@@ -30,6 +30,9 @@ jspm_packages/
 *.tgz
 .yarn-integrity
 .cache
+.env
+.env.*
+cdk.out
 /test-reports/
 junit.xml
 /coverage/

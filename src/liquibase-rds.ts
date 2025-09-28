@@ -1,15 +1,21 @@
+import * as crypto from 'crypto';
+import * as fs from 'fs';
 import {
   aws_codebuild as codebuild,
-  aws_ec2 as ec2,
   aws_iam as iam,
+  aws_lambda as lambda,
   aws_logs as logs,
-  aws_rds as rds,
   aws_s3 as s3,
   aws_s3_assets as assets,
   CfnResource,
+  CustomResource,
   Duration,
   RemovalPolicy,
+  Stack,
 } from 'aws-cdk-lib';
+import { IVpc, SubnetType } from 'aws-cdk-lib/aws-ec2';
+import { DatabaseInstance, DatabaseCluster } from 'aws-cdk-lib/aws-rds';
+import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
 /**
@@ -20,13 +26,29 @@ export interface LiquibaseRDSProps {
    * The RDS instance to run Liquibase against.
    * Can be either an RDS Instance or RDS Cluster.
    */
-  readonly rdsInstance: rds.IDatabaseInstance | rds.IDatabaseCluster;
+  readonly rdsDatabase: DatabaseInstance | DatabaseCluster;
+
+  /**
+   * Credentials ARN for Docker Hub authentication (required for pull-through cache).
+   * Should be a Secrets Manager secret with JSON format:
+   * {
+   *   "username": "your-docker-hub-username",
+   *   "password": "your-docker-hub-password-or-token"
+   * }
+   *
+   * To create this secret:
+   * aws secretsmanager create-secret \
+   *   --name "ecr-pullthroughcache/docker-hub" \
+   *   --description "Docker Hub credentials for ECR pull-through cache" \
+   *   --secret-string '{"username":"your-username","password":"your-password"}'
+   */
+  readonly dockerHubCredentialsArn?: string;
 
   /**
    * The Liquibase command to execute.
    * Example: "update", "rollback", "validate", etc.
    */
-  readonly liquibaseCommand: string;
+  readonly liquibaseCommands: string[];
 
   /**
    * Path to the directory containing Liquibase changelog files.
@@ -34,74 +56,18 @@ export interface LiquibaseRDSProps {
    */
   readonly changelogPath: string;
 
-  /**
-   * Database username for Liquibase connection.
-   * @default 'admin'
-   */
-  readonly databaseUsername?: string;
-
-  /**
-   * Database password for Liquibase connection.
-   * This should be stored in AWS Secrets Manager or Systems Manager Parameter Store.
-   * Provide the ARN or parameter name.
-   */
-  readonly databasePassword?: string;
 
   /**
    * Database name to connect to.
-   * @default - Uses the default database for the RDS instance
+   * @default - Uses the default database name from the RDS instance
    */
-  readonly databaseName?: string;
+  readonly databaseName: string;
 
   /**
-   * Database port to connect to.
-   * @default - Uses the port from the RDS instance (5432 for PostgreSQL, 3306 for MySQL)
+   * VPC to connect to - required if using a cluster
+   * @default - Uses the VPC from the RDS instance
    */
-  readonly databasePort?: number;
-
-  /**
-   * VPC where the CodeBuild project should run.
-   * Must be the same VPC as the RDS instance for private connectivity.
-   */
-  readonly vpc?: ec2.IVpc;
-
-  /**
-   * Subnets where the CodeBuild project should run.
-   * Should be private subnets with access to the RDS instance.
-   */
-  readonly subnets?: ec2.SubnetSelection;
-
-  /**
-   * Security groups to attach to the CodeBuild project.
-   * Should allow access to the RDS instance.
-   */
-  readonly securityGroups?: ec2.ISecurityGroup[];
-
-  /**
-   * Liquibase Docker image to use.
-   * @default 'liquibase/liquibase:latest'
-   */
-  readonly liquibaseImage?: string;
-
-  /**
-   * Enable ECR pull-through cache for the Liquibase Docker image.
-   * This will create a pull-through cache rule for Docker Hub and use
-   * the cached image from your private ECR registry.
-   * @default true
-   */
-  readonly enableEcrPullThroughCache?: boolean;
-
-  /**
-   * ECR repository prefix for the pull-through cache.
-   * @default 'docker-hub'
-   */
-  readonly ecrRepositoryPrefix?: string;
-
-  /**
-   * Credentials ARN for Docker Hub authentication (if required).
-   * Should be a Secrets Manager secret with ecr-pullthroughcache/ prefix.
-   */
-  readonly dockerHubCredentialsArn?: string;
+  readonly vpc?: IVpc;
 
   /**
    * Additional Liquibase command line arguments.
@@ -132,6 +98,13 @@ export interface LiquibaseRDSProps {
    * @default logs.RetentionDays.ONE_WEEK
    */
   readonly logRetention?: logs.RetentionDays;
+
+  /**
+   * Whether to automatically run Liquibase during CDK deployment.
+   * If enabled, the Liquibase commands will be executed every time the stack is deployed.
+   * @default true
+   */
+  readonly autoRun?: boolean;
 }
 
 /**
@@ -183,13 +156,14 @@ export class LiquibaseRDS extends Construct {
     // Grant permissions to access the changelog S3 bucket
     changelogAsset.grantRead(this.codeBuildRole);
 
-    // Grant permissions to access RDS (if using IAM authentication)
-    this.grantRdsAccess(props.rdsInstance);
-
-    // Create ECR pull-through cache rule if enabled
-    if (props.enableEcrPullThroughCache !== false) {
-      this.pullThroughCacheRule = this.createPullThroughCacheRule(props);
+    // Create ECR pull-through cache rule (only once per stack)
+    // Note: Docker Hub requires authentication, so dockerHubCredentialsArn should be provided
+    if (props.dockerHubCredentialsArn) {
+      this.pullThroughCacheRule = this.getOrCreatePullThroughCacheRule(props);
       this.grantEcrAccess();
+    } else {
+      // Skip pull-through cache if no credentials provided - will use Docker Hub directly
+      console.warn('dockerHubCredentialsArn not provided - skipping ECR pull-through cache. Images will be pulled directly from Docker Hub.');
     }
 
     // Create CloudWatch Log Group if logging is enabled
@@ -203,29 +177,30 @@ export class LiquibaseRDS extends Construct {
       this.logGroup.grantWrite(this.codeBuildRole);
     }
 
-    // Determine RDS endpoint and port
-    const { endpoint } = this.getRdsConnectionInfo(props.rdsInstance);
-    const port = props.databasePort?.toString() || '5432'; // Default to PostgreSQL port
+    // Extract database connection information from RDS instance
+    const { endpoint, port, databaseName, secretArn } = this.getRdsConnectionInfo(props.rdsDatabase);
 
     // Build environment variables
     const environmentVariables: { [key: string]: codebuild.BuildEnvironmentVariable } = {
       RDS_ENDPOINT: { value: endpoint },
       RDS_PORT: { value: port },
-      DATABASE_USERNAME: { value: props.databaseUsername || 'admin' },
-      LIQUIBASE_COMMAND: { value: props.liquibaseCommand },
+      DATABASE_NAME: { value: props.databaseName || databaseName || 'postgres' },
+      LIQUIBASE_COMMANDS: { value: props.liquibaseCommands.join(',') },
       CHANGELOG_S3_BUCKET: { value: this.changelogBucket.bucketName },
       CHANGELOG_S3_KEY: { value: changelogAsset.s3ObjectKey },
       ...props.environmentVariables || {},
     };
 
-    // Add database name if provided
-    if (props.databaseName) {
-      environmentVariables.DATABASE_NAME = { value: props.databaseName };
-    }
-
-    // Add database password if provided
-    if (props.databasePassword) {
-      environmentVariables.DATABASE_PASSWORD = { value: props.databasePassword };
+    // Add database credentials using Secrets Manager
+    if (secretArn) {
+      environmentVariables.DB_USER = {
+        type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
+        value: `${secretArn}:username`,
+      };
+      environmentVariables.DB_PASSWORD = {
+        type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
+        value: `${secretArn}:password`,
+      };
     }
 
     // Build the buildspec
@@ -244,9 +219,10 @@ export class LiquibaseRDS extends Construct {
         computeType: codebuild.ComputeType.SMALL,
         privileged: false,
       },
-      vpc: props.vpc,
-      subnetSelection: props.subnets,
-      securityGroups: props.securityGroups,
+      vpc: props.rdsDatabase instanceof DatabaseCluster ? props.vpc : props.rdsDatabase.vpc,
+      subnetSelection: {
+        subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+      },
       environmentVariables,
       buildSpec,
       timeout: props.timeout || Duration.hours(1),
@@ -256,32 +232,14 @@ export class LiquibaseRDS extends Construct {
         },
       } : undefined,
     });
-  }
 
-  /**
-   * Grant the CodeBuild role access to the RDS instance
-   */
-  private grantRdsAccess(rdsInstance: rds.IDatabaseInstance | rds.IDatabaseCluster): void {
-    // Grant RDS connect permission for IAM database authentication
-    this.codeBuildRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['rds-db:connect'],
-      resources: [
-        this.isRdsInstance(rdsInstance)
-          ? `arn:aws:rds-db:*:*:dbuser:${rdsInstance.instanceIdentifier}/*`
-          : `arn:aws:rds-db:*:*:dbuser:${rdsInstance.clusterIdentifier}/*`,
-      ],
-    }));
+    // Allow CodeBuild to connect to the database
+    props.rdsDatabase.connections.allowDefaultPortFrom(this.codeBuildProject, 'Allow CodeBuild to access DB');
 
-    // Grant describe permissions to get RDS information
-    this.codeBuildRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'rds:DescribeDBInstances',
-        'rds:DescribeDBClusters',
-      ],
-      resources: ['*'],
-    }));
+    // Auto-run Liquibase during deployment if enabled
+    if (props.autoRun !== false) {
+      this.createAutoDeploymentTrigger(props);
+    }
   }
 
   /**
@@ -303,25 +261,29 @@ export class LiquibaseRDS extends Construct {
   /**
    * Get RDS connection information
    */
-  private getRdsConnectionInfo(rdsInstance: rds.IDatabaseInstance | rds.IDatabaseCluster): {
+  private getRdsConnectionInfo(rdsDatabase: DatabaseInstance | DatabaseCluster): {
     endpoint: string;
+    port: string;
+    databaseName?: string;
+    secretArn?: string;
   } {
-    if (this.isRdsInstance(rdsInstance)) {
+    if (rdsDatabase instanceof DatabaseInstance) {
+      // RDS Instance
       return {
-        endpoint: rdsInstance.instanceEndpoint.hostname,
+        endpoint: rdsDatabase.instanceEndpoint.hostname,
+        port: rdsDatabase.instanceEndpoint.port.toString(),
+        databaseName: (rdsDatabase as any).instanceDatabaseName || undefined,
+        secretArn: rdsDatabase.secret?.secretArn,
       };
     } else {
+      // RDS Cluster
       return {
-        endpoint: rdsInstance.clusterEndpoint.hostname,
+        endpoint: rdsDatabase.clusterEndpoint.hostname,
+        port: rdsDatabase.clusterEndpoint.port.toString(),
+        databaseName: (rdsDatabase as any).defaultDatabaseName || undefined,
+        secretArn: rdsDatabase.secret?.secretArn,
       };
     }
-  }
-
-  /**
-   * Type guard to check if the RDS resource is an instance
-   */
-  private isRdsInstance(resource: rds.IDatabaseInstance | rds.IDatabaseCluster): resource is rds.IDatabaseInstance {
-    return 'instanceIdentifier' in resource;
   }
 
   /**
@@ -348,20 +310,20 @@ export class LiquibaseRDS extends Construct {
         build: {
           commands: [
             // Set up database URL
-            'if [ -n "$DATABASE_NAME" ]; then',
-            '  DB_URL="jdbc:postgresql://$RDS_ENDPOINT:$RDS_PORT/$DATABASE_NAME"',
-            'else',
-            '  DB_URL="jdbc:postgresql://$RDS_ENDPOINT:$RDS_PORT/"',
-            'fi',
+            'DB_URL="jdbc:postgresql://$RDS_ENDPOINT:$RDS_PORT/$DATABASE_NAME"',
             'echo "Database URL: $DB_URL"',
-            // Run Liquibase command
-            `liquibase \\
-              --url="\$DB_URL" \\
-              --username="\$DATABASE_USERNAME" \\
-              --password="\$DATABASE_PASSWORD" \\
-              --changeLogFile="/tmp/changelog/changelog.xml" \\
-              ${additionalArgs} \\
-              \$LIQUIBASE_COMMAND`,
+            // Run multiple Liquibase commands
+            'IFS="," read -ra COMMANDS <<< "$LIQUIBASE_COMMANDS"',
+            'for cmd in "${COMMANDS[@]}"; do',
+            '  echo "Running Liquibase command: $cmd"',
+            `  liquibase \\
+                --url="\$DB_URL" \\
+                --username="\$DB_USER" \\
+                --password="\$DB_PASSWORD" \\
+                --changeLogFile="/tmp/changelog/changelog.xml" \\
+                ${additionalArgs} \\
+                \$cmd`,
+            'done',
           ],
         },
         post_build: {
@@ -374,13 +336,22 @@ export class LiquibaseRDS extends Construct {
   }
 
   /**
-   * Create ECR pull-through cache rule for Docker Hub
+   * Get or create ECR pull-through cache rule for Docker Hub (only once per stack)
    */
-  private createPullThroughCacheRule(props: LiquibaseRDSProps): CfnResource {
-    const repositoryPrefix = props.ecrRepositoryPrefix || 'docker-hub';
+  private getOrCreatePullThroughCacheRule(props: LiquibaseRDSProps): CfnResource | undefined {
+    // Check if a pull-through cache rule already exists in this stack
+    const stack = Stack.of(this);
+    const existingRule = stack.node.tryFindChild('LiquibaseRDSPullThroughCacheRule') as CfnResource;
 
+    if (existingRule) {
+      // Return the existing rule
+      return existingRule;
+    }
+
+    // Create the rule at the stack level with a consistent ID
     const pullThroughCacheProps: any = {
-      EcrRepositoryPrefix: repositoryPrefix,
+      EcrRepositoryPrefix: 'liquibase-rds-cdk-cache',
+      UpstreamRegistry: 'docker-hub',
       UpstreamRegistryUrl: 'registry-1.docker.io',
     };
 
@@ -389,30 +360,105 @@ export class LiquibaseRDS extends Construct {
       pullThroughCacheProps.CredentialArn = props.dockerHubCredentialsArn;
     }
 
-    return new CfnResource(this, 'PullThroughCacheRule', {
+    return new CfnResource(stack, 'LiquibaseRDSPullThroughCacheRule', {
       type: 'AWS::ECR::PullThroughCacheRule',
       properties: pullThroughCacheProps,
     });
   }
 
   /**
-   * Determine the Docker image URI to use
+   * Determine the Docker image URI to use (ECR pull-through cache if credentials provided, otherwise Docker Hub)
    */
   private getDockerImage(props: LiquibaseRDSProps): string {
-    const baseImage = props.liquibaseImage || 'liquibase/liquibase:latest';
+    const baseImage = 'liquibase/liquibase:latest';
 
-    if (props.enableEcrPullThroughCache !== false) {
-      // Use ECR pull-through cache
-      const repositoryPrefix = props.ecrRepositoryPrefix || 'docker-hub';
+    if (props.dockerHubCredentialsArn) {
+      // Use ECR pull-through cache with 'liquibase-rds-cdk-cache' prefix
       const region = this.node.tryGetContext('aws:region') || process.env.CDK_DEFAULT_REGION || 'us-east-1';
       const account = this.node.tryGetContext('aws:account') || process.env.CDK_DEFAULT_ACCOUNT || '123456789012';
 
-      // Convert Docker Hub image to ECR cached format
-      // e.g., liquibase/liquibase:latest -> {account}.dkr.ecr.{region}.amazonaws.com/docker-hub/liquibase/liquibase:latest
-      return `${account}.dkr.ecr.${region}.amazonaws.com/${repositoryPrefix}/${baseImage}`;
+      // Convert Docker Hub image to ECR cached format with 'liquibase-rds-cdk-cache' prefix
+      // e.g., liquibase/liquibase:latest -> {account}.dkr.ecr.{region}.amazonaws.com/liquibase-rds-cdk-cache/liquibase/liquibase:latest
+      return `${account}.dkr.ecr.${region}.amazonaws.com/liquibase-rds-cdk-cache/${baseImage}`;
+    } else {
+      // Use Docker Hub directly
+      return baseImage;
     }
+  }
 
-    return baseImage;
+  /**
+   * Create auto-deployment trigger that runs Liquibase on every CDK deployment
+   */
+  private createAutoDeploymentTrigger(props: LiquibaseRDSProps): void {
+    // Create a hash of the changelog files to trigger re-runs when they change
+    const changelogHash = this.calculateChangelogHash(props.changelogPath);
+
+    // Create the Lambda function that triggers CodeBuild
+    const buildTriggerFunction = new lambda.Function(this, 'BuildTriggerFunction', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      code: lambda.Code.fromAsset('./src/codebuild-lambda-provider'),
+      handler: 'index.handler',
+      timeout: Duration.minutes(15),
+      description: 'Triggers Liquibase CodeBuild project during CDK deployment',
+    });
+
+    // Grant permissions to the Lambda function
+    buildTriggerFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'codebuild:StartBuild',
+          'codebuild:BatchGetBuilds',
+          'logs:GetLogEvents',
+          'logs:DescribeLogStreams',
+          'logs:DescribeLogGroups',
+        ],
+        resources: ['*'],
+      }),
+    );
+
+    // Create the custom resource provider
+    const buildTriggerProvider = new Provider(this, 'BuildTriggerProvider', {
+      onEventHandler: buildTriggerFunction,
+    });
+
+    // Create the custom resource that triggers the build
+    const buildTriggerResource = new CustomResource(this, 'BuildTriggerResource', {
+      serviceToken: buildTriggerProvider.serviceToken,
+      properties: {
+        ProjectName: this.codeBuildProject.projectName,
+        Trigger: `${changelogHash}|${props.liquibaseCommands.join(',')}|${this.codeBuildProject.projectName}`,
+      },
+    });
+
+    // Ensure dependencies are created before triggering
+    buildTriggerResource.node.addDependency(this.codeBuildProject);
+    buildTriggerResource.node.addDependency(props.rdsDatabase);
+  }
+
+  /**
+   * Calculate hash of changelog files to detect changes
+   */
+  private calculateChangelogHash(changelogPath: string): string {
+    try {
+      // Read all files in the changelog directory
+      const files = fs.readdirSync(changelogPath, { recursive: true });
+      const hash = crypto.createHash('sha256');
+
+      files.forEach(file => {
+        if (typeof file === 'string') {
+          const filePath = `${changelogPath}/${file}`;
+          if (fs.statSync(filePath).isFile()) {
+            const content = fs.readFileSync(filePath, 'utf8');
+            hash.update(content);
+          }
+        }
+      });
+
+      return hash.digest('hex');
+    } catch (error) {
+      console.warn(`Could not calculate changelog hash: ${error}`);
+      return Date.now().toString(); // Fallback to timestamp
+    }
   }
 
   /**

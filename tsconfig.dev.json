@@ -33,8 +33,6 @@
   ],
   "exclude": [
     "node_modules",
-    "src/codebuild-lambda-provider/**/*",
-    "lib",
-    "*.d.ts"
+    "src/codebuild-lambda-provider/**/*"
   ]
 }

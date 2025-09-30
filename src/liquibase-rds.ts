@@ -1,18 +1,16 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
-import * as path from 'path';
 import { CfnResource, CustomResource, Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import { BuildEnvironmentVariable, BuildEnvironmentVariableType, BuildSpec, ComputeType, LinuxBuildImage, Project } from 'aws-cdk-lib/aws-codebuild';
 import { IVpc, SubnetType } from 'aws-cdk-lib/aws-ec2';
 import { Effect, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
+import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { DatabaseInstance, DatabaseCluster } from 'aws-cdk-lib/aws-rds';
 import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { Asset } from 'aws-cdk-lib/aws-s3-assets';
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
-import { TokenInjectableDockerBuilder } from 'token-injectable-docker-builder';
 
 /**
  * Properties for the LiquibaseRDS construct
@@ -390,12 +388,11 @@ export class LiquibaseRDS extends Construct {
     const changelogHash = this.calculateChangelogHash(props.changelogPath);
 
     // Create the Lambda function that triggers CodeBuild using Docker
-    const buildTriggerFunction = new DockerImageFunction(this, 'BuildTriggerFunction', {
-      code: new TokenInjectableDockerBuilder(
-        this, 'TokenInjectableDockerBuilderCodebuildLambdaProvider', {
-          path: path.resolve(__dirname, 'codebuild-lambda-provider'),
-        },
-      ).dockerImageCode,
+    const buildTriggerFunction = new Function(this, 'BuildTriggerFunction', {
+      runtime: Runtime.NODEJS_20_X,
+      code: Code.fromAsset('./src/codebuild-lambda-provider'),
+      handler: 'index.handler',
+      timeout: Duration.minutes(15),
     });
 
     // Grant permissions to the Lambda function

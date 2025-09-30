@@ -33,9 +33,6 @@ jspm_packages/
 .env
 .env.*
 cdk.out
-src/codebuild-lambda-provider/*.js
-src/codebuild-lambda-provider/*.d.ts
-src/codebuild-lambda-provider/node_modules
 /test-reports/
 junit.xml
 /coverage/
@@ -55,5 +52,5 @@ junit.xml
 .jsii
 tsconfig.json
 !/API.md
-!src/codebuild-lambda-provider/tsconfig.json
+!src/codebuild-lambda-provider/index.js
 !/.projenrc.ts

@@ -1,0 +1,22 @@
+{
+  "name": "codebuild-lambda-provider",
+  "version": "1.0.0",
+  "description": "Docker-based Lambda function for triggering CodeBuild projects",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf *.js *.d.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.0.0",
+    "@aws-sdk/client-codebuild": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

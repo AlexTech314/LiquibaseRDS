@@ -1304,7 +1304,7 @@ available-typed-arrays@^1.0.7:
   dependencies:
     possible-typed-array-names "^1.0.0"
 
-aws-cdk-lib@2.217.0:
+aws-cdk-lib@^2.173.2, aws-cdk-lib@2.217.0:
   version "2.217.0"
   resolved "https://registry.npmjs.org/aws-cdk-lib/-/aws-cdk-lib-2.217.0.tgz"
   integrity sha512-vPxTMF3IDW0Bf5m07yxebWjzZhd5/DcEPKusu4F9krnTORhx2UMqcTyvAmb7SLbi2+FrKYhP5w4nPBNxf8LhHA==
@@ -1683,7 +1683,7 @@ concat-stream@^2.0.0:
     readable-stream "^3.0.2"
     typedarray "^0.0.6"
 
-constructs@^10.0.0, constructs@10.0.5:
+constructs@^10.0.0, constructs@^10.0.5, constructs@10.0.5:
   version "10.0.5"
   resolved "https://registry.npmjs.org/constructs/-/constructs-10.0.5.tgz"
   integrity sha512-IwOwekzrASFC3qt4ozCtV09rteAIAesuCGsW0p+uBfqHd2XcvA5CXqJjgf4eUqm6g8e/noXlVCMDWwC8GaLtrg==
@@ -2041,11 +2041,6 @@ dot-prop@^5.1.0:
   integrity sha512-QM8q3zDe58hqUqjraQOmzZ1LIH9SWQJTlEKCH4kJ2oQvLZk7RbQXvtDM2XEq3fwkV9CCvvH4LA0AV+ogFsBM2Q==
   dependencies:
     is-obj "^2.0.0"
-
-dotenv@^17.2.2:
-  version "17.2.2"
-  resolved "https://registry.npmjs.org/dotenv/-/dotenv-17.2.2.tgz"
-  integrity sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==
 
 dotgitignore@^2.1.0:
   version "2.1.0"
@@ -5465,6 +5460,11 @@ to-regex-range@^5.0.1:
   integrity sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==
   dependencies:
     is-number "^7.0.0"
+
+token-injectable-docker-builder@^1.5.19:
+  version "1.5.19"
+  resolved "https://registry.npmjs.org/token-injectable-docker-builder/-/token-injectable-docker-builder-1.5.19.tgz"
+  integrity sha512-CcelVbYDaAFNz/PHoQVpqVYx6gqpqloXxyDynT+Qaqw2aBIPFXv1Oxvz2SkH6pmhUIxxkEmiBUzAkR9t6pxtIQ==
 
 tough-cookie@^5.0.0:
   version "5.1.2"

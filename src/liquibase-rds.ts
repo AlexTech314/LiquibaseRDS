@@ -1,22 +1,18 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
-import {
-  aws_codebuild as codebuild,
-  aws_iam as iam,
-  aws_lambda as lambda,
-  aws_logs as logs,
-  aws_s3 as s3,
-  aws_s3_assets as assets,
-  CfnResource,
-  CustomResource,
-  Duration,
-  RemovalPolicy,
-  Stack,
-} from 'aws-cdk-lib';
+import * as path from 'path';
+import { CfnResource, CustomResource, Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
+import { BuildEnvironmentVariable, BuildEnvironmentVariableType, BuildSpec, ComputeType, LinuxBuildImage, Project } from 'aws-cdk-lib/aws-codebuild';
 import { IVpc, SubnetType } from 'aws-cdk-lib/aws-ec2';
+import { Effect, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
+import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { DatabaseInstance, DatabaseCluster } from 'aws-cdk-lib/aws-rds';
+import { IBucket } from 'aws-cdk-lib/aws-s3';
+import { Asset } from 'aws-cdk-lib/aws-s3-assets';
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
+import { TokenInjectableDockerBuilder } from 'token-injectable-docker-builder';
 
 /**
  * Properties for the LiquibaseRDS construct
@@ -79,7 +75,7 @@ export interface LiquibaseRDSProps {
    * Environment variables to pass to the Liquibase container.
    * @default {}
    */
-  readonly environmentVariables?: { [key: string]: codebuild.BuildEnvironmentVariable };
+  readonly environmentVariables?: { [key: string]: BuildEnvironmentVariable };
 
   /**
    * Timeout for the CodeBuild project execution.
@@ -97,7 +93,7 @@ export interface LiquibaseRDSProps {
    * Log retention period for CloudWatch Logs.
    * @default logs.RetentionDays.ONE_WEEK
    */
-  readonly logRetention?: logs.RetentionDays;
+  readonly logRetention?: RetentionDays;
 
   /**
    * Whether to automatically run Liquibase during CDK deployment.
@@ -115,22 +111,22 @@ export class LiquibaseRDS extends Construct {
   /**
    * The CodeBuild project that runs Liquibase
    */
-  public readonly codeBuildProject: codebuild.Project;
+  public readonly codeBuildProject: Project;
 
   /**
    * The S3 bucket containing the changelog files
    */
-  public readonly changelogBucket: s3.IBucket;
+  public readonly changelogBucket: IBucket;
 
   /**
    * The IAM role used by the CodeBuild project
    */
-  public readonly codeBuildRole: iam.Role;
+  public readonly codeBuildRole: Role;
 
   /**
    * CloudWatch Log Group for the CodeBuild project
    */
-  public readonly logGroup?: logs.LogGroup;
+  public readonly logGroup?: LogGroup;
 
   /**
    * ECR pull-through cache rule (if enabled)
@@ -141,15 +137,15 @@ export class LiquibaseRDS extends Construct {
     super(scope, id);
 
     // Upload changelog files to S3
-    const changelogAsset = new assets.Asset(this, 'ChangelogAsset', {
+    const changelogAsset = new Asset(this, 'ChangelogAsset', {
       path: props.changelogPath,
     });
 
     this.changelogBucket = changelogAsset.bucket;
 
     // Create IAM role for CodeBuild
-    this.codeBuildRole = new iam.Role(this, 'CodeBuildRole', {
-      assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
+    this.codeBuildRole = new Role(this, 'CodeBuildRole', {
+      assumedBy: new ServicePrincipal('codebuild.amazonaws.com'),
       description: 'IAM role for Liquibase CodeBuild project',
     });
 
@@ -168,9 +164,9 @@ export class LiquibaseRDS extends Construct {
 
     // Create CloudWatch Log Group if logging is enabled
     if (props.enableLogging !== false) {
-      this.logGroup = new logs.LogGroup(this, 'LogGroup', {
+      this.logGroup = new LogGroup(this, 'LogGroup', {
         logGroupName: `/aws/codebuild/${id}-liquibase`,
-        retention: props.logRetention || logs.RetentionDays.ONE_WEEK,
+        retention: props.logRetention || RetentionDays.ONE_WEEK,
         removalPolicy: RemovalPolicy.DESTROY,
       });
 
@@ -181,7 +177,7 @@ export class LiquibaseRDS extends Construct {
     const { endpoint, port, databaseName, secretArn } = this.getRdsConnectionInfo(props.rdsDatabase);
 
     // Build environment variables
-    const environmentVariables: { [key: string]: codebuild.BuildEnvironmentVariable } = {
+    const environmentVariables: { [key: string]: BuildEnvironmentVariable } = {
       RDS_ENDPOINT: { value: endpoint },
       RDS_PORT: { value: port },
       DATABASE_NAME: { value: props.databaseName || databaseName || 'postgres' },
@@ -194,11 +190,11 @@ export class LiquibaseRDS extends Construct {
     // Add database credentials using Secrets Manager
     if (secretArn) {
       environmentVariables.DB_USER = {
-        type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
+        type: BuildEnvironmentVariableType.SECRETS_MANAGER,
         value: `${secretArn}:username`,
       };
       environmentVariables.DB_PASSWORD = {
-        type: codebuild.BuildEnvironmentVariableType.SECRETS_MANAGER,
+        type: BuildEnvironmentVariableType.SECRETS_MANAGER,
         value: `${secretArn}:password`,
       };
     }
@@ -210,13 +206,13 @@ export class LiquibaseRDS extends Construct {
     const dockerImage = this.getDockerImage(props);
 
     // Create the CodeBuild project
-    this.codeBuildProject = new codebuild.Project(this, 'LiquibaseProject', {
+    this.codeBuildProject = new Project(this, 'LiquibaseProject', {
       projectName: `${id}-liquibase`,
       description: 'CodeBuild project to run Liquibase migrations',
       role: this.codeBuildRole,
       environment: {
-        buildImage: codebuild.LinuxBuildImage.fromDockerRegistry(dockerImage),
-        computeType: codebuild.ComputeType.SMALL,
+        buildImage: LinuxBuildImage.fromDockerRegistry(dockerImage),
+        computeType: ComputeType.SMALL,
         privileged: false,
       },
       vpc: props.rdsDatabase instanceof DatabaseCluster ? props.vpc : props.rdsDatabase.vpc,
@@ -246,8 +242,8 @@ export class LiquibaseRDS extends Construct {
    * Grant the CodeBuild role access to ECR for pulling images
    */
   private grantEcrAccess(): void {
-    this.codeBuildRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
+    this.codeBuildRole.addToPolicy(new PolicyStatement({
+      effect: Effect.ALLOW,
       actions: [
         'ecr:BatchCheckLayerAvailability',
         'ecr:GetDownloadUrlForLayer',
@@ -289,10 +285,10 @@ export class LiquibaseRDS extends Construct {
   /**
    * Create the CodeBuild buildspec
    */
-  private createBuildSpec(props: LiquibaseRDSProps): codebuild.BuildSpec {
+  private createBuildSpec(props: LiquibaseRDSProps): BuildSpec {
     const additionalArgs = props.additionalArgs?.join(' ') || '';
 
-    return codebuild.BuildSpec.fromObject({
+    return BuildSpec.fromObject({
       version: '0.2',
       phases: {
         pre_build: {
@@ -393,18 +389,18 @@ export class LiquibaseRDS extends Construct {
     // Create a hash of the changelog files to trigger re-runs when they change
     const changelogHash = this.calculateChangelogHash(props.changelogPath);
 
-    // Create the Lambda function that triggers CodeBuild
-    const buildTriggerFunction = new lambda.Function(this, 'BuildTriggerFunction', {
-      runtime: lambda.Runtime.NODEJS_20_X,
-      code: lambda.Code.fromAsset('./src/codebuild-lambda-provider'),
-      handler: 'index.handler',
-      timeout: Duration.minutes(15),
-      description: 'Triggers Liquibase CodeBuild project during CDK deployment',
+    // Create the Lambda function that triggers CodeBuild using Docker
+    const buildTriggerFunction = new DockerImageFunction(this, 'BuildTriggerFunction', {
+      code: new TokenInjectableDockerBuilder(
+        this, 'TokenInjectableDockerBuilderCodebuildLambdaProvider', {
+          path: path.resolve(__dirname, 'codebuild-lambda-provider'),
+        },
+      ).dockerImageCode,
     });
 
     // Grant permissions to the Lambda function
     buildTriggerFunction.addToRolePolicy(
-      new iam.PolicyStatement({
+      new PolicyStatement({
         actions: [
           'codebuild:StartBuild',
           'codebuild:BatchGetBuilds',
@@ -464,7 +460,7 @@ export class LiquibaseRDS extends Construct {
   /**
    * Start the CodeBuild execution
    */
-  public startExecution(): codebuild.Project {
+  public startExecution(): Project {
     return this.codeBuildProject;
   }
 }

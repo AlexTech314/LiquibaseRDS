@@ -64,11 +64,8 @@
     "constructs": "^10.0.5"
   },
   "dependencies": {
-    "dotenv": "^17.2.2"
+    "token-injectable-docker-builder": "^1.5.19"
   },
-  "bundledDependencies": [
-    "dotenv"
-  ],
   "keywords": [
     "aws",
     "cdk",
